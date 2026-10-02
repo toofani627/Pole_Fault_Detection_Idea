@@ -1,0 +1,180 @@
+// ==========================================
+// 1. GLOBAL PARAMETERS (Saved Coordinates)
+// ==========================================
+inner_length = 80;
+inner_width = 80;
+inner_height = 140; 
+internal_fillet_radius = 5;
+wall_thickness = 5;
+roof_angle = 20;
+
+// --- MOUNTING TAB PARAMETERS ---
+tab_length = 7;        // L
+tab_breadth = 2.5;     // B
+tab_height = 7;        // H
+tab_hole_dia = 3;      // Hole dia
+tab_dist_from_back = 0; 
+tab_dist_from_side = 5; 
+tab_z_low = 30;        
+tab_z_high = 100;      
+
+// --- INTERFACE & SIDE HOLE CONTROLS ---
+left_hole_y_pos = 45; 
+left_hole_z_pos = 50; 
+left_hole_dia = 5;
+
+// --- GATE PARAMETERS ---
+gate_thickness = 3;
+gate_width = inner_length - 10; // Matches window width
+
+eps = 0.1; 
+
+// ==========================================
+// 2. CALCULATED DIMENSIONS
+// ==========================================
+outer_length = inner_length + (2 * wall_thickness);
+outer_width = inner_width + (2 * wall_thickness);
+outer_height = inner_height + wall_thickness;
+external_fillet_radius = internal_fillet_radius + wall_thickness;
+
+drop_amount = outer_width * tan(roof_angle);
+front_cut_height = outer_height - drop_amount;
+
+// Math for congruent gate holes
+hole_x_rel = (wall_thickness + tab_dist_from_side + tab_length/2) - ((outer_length - gate_width)/2);
+hole_z_low_rel = (tab_z_low + tab_height/2) - wall_thickness;
+hole_z_high_rel = (tab_z_high + tab_height/2) - wall_thickness;
+
+// ==========================================
+// 3. BASE MODULES
+// ==========================================
+module rounded_block(l, w, h, r) {
+    hull() {
+        translate([r, r, 0]) cylinder(h=h, r=r, $fn=50);
+        translate([l-r, r, 0]) cylinder(h=h, r=r, $fn=50);
+        translate([r, w-r, 0]) cylinder(h=h, r=r, $fn=50);
+        translate([l-r, w-r, 0]) cylinder(h=h, r=r, $fn=50);
+    }
+}
+
+module main_body() {
+    difference() {
+        rounded_block(outer_length, outer_width, outer_height, external_fillet_radius);
+        translate([wall_thickness, wall_thickness, wall_thickness])
+            rounded_block(inner_length, inner_width, inner_height + 50, internal_fillet_radius);
+    }
+}
+
+// ==========================================
+// 4. FEATURE MODULES (All Holes & Slots)
+// ==========================================
+module front_interface_holes() {
+    main_hole_dia = 30;
+    pentagon_radius = 25; 
+    center_x = outer_length / 2;
+    center_z = front_cut_height / 2;
+
+    // Main 3cm Hole
+    translate([center_x, -1, center_z])
+        rotate([-90, 0, 0]) cylinder(h=wall_thickness+2, d=main_hole_dia, $fn=60);
+
+    // Pentagon 5mm Holes
+    for (i = [0 : 4]) {
+        angle = 90 + (i * 72); 
+        x_off = pentagon_radius * cos(angle);
+        z_off = pentagon_radius * sin(angle);
+        translate([center_x + x_off, -1, center_z + z_off])
+            rotate([-90, 0, 0]) cylinder(h=wall_thickness+2, d=5, $fn=30);
+    }
+}
+
+module floor_offset_slot() {
+    y_pos = ((outer_width - 2.3) / 2) - 40; 
+    translate([(outer_length - 10) / 2, y_pos, -1])
+        cube([10, 2.3, wall_thickness + 2]);
+}
+
+module left_wall_hole() {
+    translate([-1, left_hole_y_pos, left_hole_z_pos])
+        rotate([0, 90, 0]) cylinder(h=wall_thickness+2, d=left_hole_dia, $fn=30);
+}
+
+module roof_top_holes() {
+    for (x_pos = [15, outer_length - 15]) 
+        translate([x_pos, outer_width/2, 0]) cylinder(h=outer_height*2, d=5, center=true, $fn=30);
+}
+
+module mounting_tabs() {
+    for (z_pos = [tab_z_low, tab_z_high]) {
+        // Left
+        translate([wall_thickness + tab_dist_from_side, outer_width - wall_thickness - tab_breadth - tab_dist_from_back, z_pos])
+        difference() {
+            cube([tab_length, tab_breadth, tab_height]);
+            translate([tab_length/2, -1, tab_height/2]) rotate([-90, 0, 0]) cylinder(h=tab_breadth+2, d=tab_hole_dia, $fn=30);
+        }
+        // Right
+        translate([outer_length - wall_thickness - tab_length - tab_dist_from_side, outer_width - wall_thickness - tab_breadth - tab_dist_from_back, z_pos])
+        difference() {
+            cube([tab_length, tab_breadth, tab_height]);
+            translate([tab_length/2, -1, tab_height/2]) rotate([-90, 0, 0]) cylinder(h=tab_breadth+2, d=tab_hole_dia, $fn=30);
+        }
+    }
+}
+
+// ==========================================
+// 5. MODULE: THE REAR GATE (Standalone)
+// ==========================================
+module rear_gate() {
+    color("DarkCyan")
+    difference() {
+        // Base plate matching internal radius
+        translate([internal_fillet_radius, internal_fillet_radius, 0])
+        hull() {
+            cylinder(h=gate_thickness, r=internal_fillet_radius, $fn=50);
+            translate([gate_width - 2*internal_fillet_radius, 0, 0]) cylinder(h=gate_thickness, r=internal_fillet_radius, $fn=50);
+            translate([0, inner_height - 2*internal_fillet_radius, 0]) cylinder(h=gate_thickness, r=internal_fillet_radius, $fn=50);
+            translate([gate_width - 2*internal_fillet_radius, inner_height - 2*internal_fillet_radius, 0]) cylinder(h=gate_thickness, r=internal_fillet_radius, $fn=50);
+        }
+        // Congruent Holes
+        for (z_off = [hole_z_low_rel, hole_z_high_rel]) {
+            translate([hole_x_rel, z_off, -1]) cylinder(h=gate_thickness+2, d=tab_hole_dia, $fn=30);
+            translate([gate_width - hole_x_rel, z_off, -1]) cylinder(h=gate_thickness+2, d=tab_hole_dia, $fn=30);
+        }
+    }
+}
+
+// ==========================================
+// 6. FINAL ASSEMBLY & RENDER
+// ==========================================
+render_mode = "both"; // ["cabin", "gate", "both"]
+
+if (render_mode == "cabin" || render_mode == "both") {
+    union() {
+        color("LightSeaGreen")
+        difference() {
+            union() { main_body(); mounting_tabs(); }
+            // All Cuts & Holes
+            translate([-10, -5, front_cut_height]) rotate([roof_angle, 0, 0]) cube([outer_length + 20, outer_width * 3, 300]);
+            translate([(outer_length - gate_width) / 2, inner_width + wall_thickness - 1, wall_thickness - eps]) cube([gate_width, wall_thickness + 2, inner_height + 20]);
+            front_interface_holes();
+            floor_offset_slot();
+            left_wall_hole();
+        }
+        // Add Roof (Separate color to fix Z-fighting)
+        difference() {
+            color("DarkSlateGray") intersection() {
+                translate([0, 0, front_cut_height]) rotate([roof_angle, 0, 0]) translate([-10, -20, 0]) cube([outer_length + 20, outer_width * 3, 3]);
+                translate([0.025, 0.025, -eps]) rounded_block(outer_length - 0.05, outer_width - 0.05, outer_height + 100, external_fillet_radius);
+            }
+            roof_top_holes();
+        }
+    }
+}
+
+if (render_mode == "gate") {
+    rear_gate();
+} else if (render_mode == "both") {
+    // Show gate in preview position
+    translate([(outer_length - gate_width)/2, outer_width + 10, wall_thickness]) 
+        rotate([90, 0, 0]) rear_gate();
+}
